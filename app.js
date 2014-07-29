@@ -12,8 +12,7 @@ var SessionSockets = require('session.socket.io-express4');
 var app = express();
 
 // config and setup helpers
-var common = require('./common');
-var helpers = common.helpers();
+var helpers = require('./helpers')();
 var config = require('./config');
 var setup = require('./setup');
 
@@ -21,7 +20,7 @@ var setup = require('./setup');
 var sessionStore = setup.sessions(RedisStore, config);
 
 // setup application
-setup.db(mongoose, config.get('database.mongo.url'));
+setup.db(mongoose, config);
 setup.registerPartials('./views/partials/', hbs);
 setup.registerHelpers(helpers.handlebars, hbs);
 
@@ -42,18 +41,20 @@ var io = socketio.listen(server);
 var sessionSockets = new SessionSockets(io, sessionStore, cookieParser(), config.get('session.key'));
 
 // app dependencies (app specific)
-var ipc = common.ipc(0);
+var ipc = require('./modules/ipc')(0);
 var mailer = require('./modules/mailer')(config);
 var models = require('./models')(mongoose, helpers.validators);
 var services = require('./services')(models, helpers);
-var middleware = require('./middleware')();
 var handlers = require('./handlers')(passport, services);
 var authentication = require('./modules/authentication')(models, mailer);
 
 // app specific modules
 require('./modules/sockets')(io, sessionSockets, ipc);
 require('./modules/passport')(passport, config, authentication, models);
-require('./routes')(app, express, middleware, handlers, config);
+require('./routes')(app, express, handlers, config);
+
+// express error handling
+setup.handleExpressError(app);
 
 // run application
 setup.run(server, config);

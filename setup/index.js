@@ -26,7 +26,8 @@ module.exports.configureExpress = function (options, app, config) {
     app.use(options.express.static(options.dir + '/client/public'));
     app.use(morgan('dev'));
     app.use(options.cookieParser());
-    app.use(bodyParser());
+    app.use(bodyParser.urlencoded());
+    app.use(bodyParser.json());
     app.use(methodOverride());
     app.use(options.session({ secret: config.get('server.secret'), store: options.store, key: config.get('session.key') }));
     app.use(options.passport.initialize());
@@ -38,6 +39,35 @@ module.exports.configureExpress = function (options, app, config) {
     if ('development' == config.get('env')) {
        app.use(errorHandler());
     }
+};
+
+// handle express errors
+module.exports.handleExpressError = function (app) {
+    // handle 404 not found
+    app.use(function(req, res, next){
+        res.status(404);
+
+        // respond with html page
+        if (req.accepts('html')) {
+            res.render('404', { url: req.url });
+            return;
+        }
+
+        // respond with json
+        if (req.accepts('json')) {
+            res.send({ error: 'Not found' });
+            return;
+        }
+
+        // default to plain-text. send()
+        res.type('txt').send('Not found');
+    });
+
+    // handling other errors
+    app.use(function(err, req, res, next){
+        console.error(err.stack);
+        res.send(500, 'Something broke!');
+    });
 };
 
 // register handlebars partials
@@ -60,7 +90,7 @@ module.exports.registerPartials = function (path, handlebars) {
 module.exports.registerHelpers = function (helpers, handlebars) {
     for (var helper in helpers) {
         if (helpers.hasOwnProperty(helper)) {
-            handlebars.registerHelper(helper, helpers.helper);
+            handlebars.registerHelper(helper, helpers[helper]);
         }
     }
     return;
@@ -86,8 +116,8 @@ module.exports.sessions = function (SessionStore, config) {
 };
 
 // connect to backend store (db)
-module.exports.db = function (db, url)  {
-    db.connect(url);
+module.exports.db = function (db, config)  {
+    db.connect(config.get('database.mongo.url'));
 };
 
 // run application
